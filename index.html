@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ECO-OBRAS_BR-116/MG</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', system-ui, sans-serif; background-color: #f6f8f4; color: #152018; }
+        .app { display: flex; flex-direction: column; min-height: 100vh; }
+        .topbar { background-color: #056B28; color: white; padding: 20px 30px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); display: flex; justify-content: space-between; align-items: center; }
+        .topbar h1 { font-size: 24px; font-weight: 700; }
+        .topbar p { font-size: 14px; opacity: 0.9; }
+        .topbar-right { display: flex; align-items: center; gap: 20px; }
+        .logout-btn { padding: 8px 16px; background-color: rgba(255, 255, 255, 0.2); color: white; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 6px; cursor: pointer; font-size: 14px; }
+        .logout-btn:hover { background-color: rgba(255, 255, 255, 0.3); }
+        .login-container { display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #056B28 0%, #1DA013 100%); }
+        .login-box { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2); width: 100%; max-width: 400px; }
+        .login-box h1 { color: #056B28; font-size: 24px; font-weight: 700; margin-bottom: 5px; text-align: center; }
+        .login-box .subtitle { color: #666; font-size: 14px; text-align: center; margin-bottom: 30px; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; font-weight: 500; color: #333; margin-bottom: 8px; font-size: 14px; }
+        .form-group input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
+        .form-group input:focus { outline: none; border-color: #1DA013; box-shadow: 0 0 0 3px rgba(29, 160, 19, 0.1); }
+        .error-message { background-color: #fee; color: #c33; padding: 12px; border-radius: 6px; margin-bottom: 20px; font-size: 14px; border-left: 4px solid #c33; }
+        .login-box button { width: 100%; padding: 12px; background-color: #1DA013; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: 600; cursor: pointer; margin-bottom: 20px; }
+        .login-box button:hover { background-color: #056B28; }
+        .toggle-auth { text-align: center; }
+        .toggle-auth button { background: none; border: none; color: #1DA013; font-weight: 600; cursor: pointer; text-decoration: underline; }
+        .sidebar { display: flex; gap: 10px; padding: 15px 30px; background-color: white; border-bottom: 1px solid #e0e0e0; }
+        .sidebar button { padding: 10px 16px; border: none; border-radius: 6px; background-color: #f0f0f0; color: #152018; cursor: pointer; font-size: 14px; font-weight: 500; }
+        .sidebar button:hover { background-color: #72D216; color: white; }
+        .sidebar button.active { background-color: #1DA013; color: white; }
+        .content { flex: 1; padding: 30px; max-width: 1400px; margin: 0 auto; width: 100%; }
+        .panel { background-color: white; border-radius: 8px; padding: 25px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); }
+        .panel h2 { color: #056B28; font-size: 22px; margin-bottom: 20px; border-bottom: 2px solid #72D216; padding-bottom: 10px; }
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-top: 20px; }
+        .kpi-card { background: linear-gradient(135deg, #1DA013 0%, #056B28 100%); color: white; padding: 20px; border-radius: 8px; text-align: center; }
+        .kpi-value { font-size: 32px; font-weight: 700; margin-bottom: 10px; }
+        .kpi-label { font-size: 14px; opacity: 0.9; }
+        .loading { text-align: center; padding: 40px; }
+        .spinner { width: 40px; height: 40px; border: 4px solid rgba(5, 107, 40, 0.2); border-top: 4px solid #056B28; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyA1GJqoOdVnQSfJGq7SuLgZ4vxJ1p8AF5A",
+            authDomain: "eco-obras.firebaseapp.com",
+            projectId: "eco-obras",
+            storageBucket: "eco-obras.firebasestorage.app",
+            messagingSenderId: "497089629790",
+            appId: "1:497089629790:web:3644309e13fb9b9e836ecf"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        let currentUser = null;
+        let activeSection = 'exec';
+        let data = { obras: 0, empresas: 0, avancos: 0, interferencias: 0 };
+
+        function render() {
+            const root = document.getElementById('root');
+            if (!currentUser) {
+                root.innerHTML = `
+                    <div class="login-container">
+                        <div class="login-box">
+                            <h1>ECO-OBRAS_BR-116/MG</h1>
+                            <p class="subtitle">Plataforma de Acompanhamento de Obras</p>
+                            <form id="authForm">
+                                <div class="form-group">
+                                    <label>Email</label>
+                                    <input type="email" id="email" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Senha</label>
+                                    <input type="password" id="password" required>
+                                </div>
+                                <div id="error" class="error-message" style="display:none;"></div>
+                                <button type="submit" id="submitBtn">Entrar</button>
+                            </form>
+                            <p class="toggle-auth"><button type="button" id="toggleAuth">Crie uma conta</button></p>
+                        </div>
+                    </div>
+                `;
+                
+                let isRegistering = false;
+                const toggleBtn = document.getElementById('toggleAuth');
+                const submitBtn = document.getElementById('submitBtn');
+                const form = document.getElementById('authForm');
+                const errorDiv = document.getElementById('error');
+
+                toggleBtn.onclick = () => {
+                    isRegistering = !isRegistering;
+                    toggleBtn.textContent = isRegistering ? 'Faça login' : 'Crie uma conta';
+                    submitBtn.textContent = isRegistering ? 'Criar Conta' : 'Entrar';
+                };
+
+                form.onsubmit = async (e) => {
+                    e.preventDefault();
+                    const email = document.getElementById('email').value;
+                    const password = document.getElementById('password').value;
+                    errorDiv.style.display = 'none';
+                    submitBtn.disabled = true;
+
+                    try {
+                        if (isRegistering) {
+                            await auth.createUserWithEmailAndPassword(email, password);
+                        } else {
+                            await auth.signInWithEmailAndPassword(email, password);
+                        }
+                    } catch (error) {
+                        errorDiv.textContent = error.message;
+                        errorDiv.style.display = 'block';
+                    } finally {
+                        submitBtn.disabled = false;
+                    }
+                };
+            } else {
+                root.innerHTML = `
+                    <div class="app">
+                        <header class="topbar">
+                            <div>
+                                <h1>ECO-OBRAS_BR-116/MG</h1>
+                                <p>Plataforma de Acompanhamento de Obras</p>
+                            </div>
+                            <div class="topbar-right">
+                                <span>👤 ${currentUser.email}</span>
+                                <button class="logout-btn" id="logoutBtn">Sair</button>
+                            </div>
+                        </header>
+                        <nav class="sidebar">
+                            <button class="${activeSection === 'exec' ? 'active' : ''}" onclick="setSection('exec')">📊 Executivo</button>
+                            <button class="${activeSection === 'obras' ? 'active' : ''}" onclick="setSection('obras')">🏗️ Obras</button>
+                            <button class="${activeSection === 'empresas' ? 'active' : ''}" onclick="setSection('empresas')">🏢 Empresas</button>
+                            <button class="${activeSection === 'interferencias' ? 'active' : ''}" onclick="setSection('interferencias')">⚠️ Interferências</button>
+                        </nav>
+                        <main class="content">
+                            <div class="panel">
+                                ${activeSection === 'exec' ? `
+                                    <h2>📊 Painel Executivo</h2>
+                                    <div class="kpi-grid">
+                                        <div class="kpi-card"><div class="kpi-value">${data.obras}</div><div class="kpi-label">Obras</div></div>
+                                        <div class="kpi-card"><div class="kpi-value">${data.empresas}</div><div class="kpi-label">Empresas</div></div>
+                                        <div class="kpi-card"><div class="kpi-value">${data.avancos}</div><div class="kpi-label">Avanços</div></div>
+                                        <div class="kpi-card"><div class="kpi-value">${data.interferencias}</div><div class="kpi-label">Interferências</div></div>
+                                    </div>
+                                ` : `<h2>${activeSection === 'obras' ? '🏗️ Obras' : activeSection === 'empresas' ? '🏢 Empresas' : '⚠️ Interferências'}</h2><p>Seção em desenvolvimento...</p>`}
+                            </div>
+                        </main>
+                    </div>
+                `;
+                document.getElementById('logoutBtn').onclick = () => auth.signOut();
+            }
+        }
+
+        window.setSection = (section) => {
+            activeSection = section;
+            render();
+        };
+
+        async function loadData() {
+            try {
+                const obrasSnap = await db.collection('obras').get();
+                const empresasSnap = await db.collection('empresas').get();
+                const avancosSnap = await db.collection('avancos').get();
+                const interferenciasSnap = await db.collection('interferencias').get();
+                
+                data = {
+                    obras: obrasSnap.size,
+                    empresas: empresasSnap.size,
+                    avancos: avancosSnap.size,
+                    interferencias: interferenciasSnap.size
+                };
+                render();
+            } catch (error) {
+                console.error('Erro ao carregar dados:', error);
+            }
+        }
+
+        auth.onAuthStateChanged((user) => {
+            currentUser = user;
+            if (user) {
+                loadData();
+            } else {
+                render();
+            }
+        });
+
+        render();
+    </script>
+</body>
+</html>
